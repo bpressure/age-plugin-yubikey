@@ -9,7 +9,7 @@ keywords = ["age", "cli", "encryption", "yubikey"]
 categories = ["command-line-utilities", "cryptography"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-rust-version = "1.70" # MSRV
+rust-version = "1.89" # MSRV
 
 [package.metadata.deb]
 extended-description = """\
@@ -29,6 +29,7 @@ bech32 = "0.11"
 console = { version = "0.15", default-features = false }
 dialoguer = { version = "0.11", default-features = false, features = ["password"] }
 env_logger = "0.10"
+getrandom = { version = "0.4", features = ["sys_rng"] }
 gumdrop = "0.8"
 hex = "0.4"
 hkdf = "0.12"
@@ -39,9 +40,11 @@ pcsc = "2.4"
 rand = "0.8"
 sha2 = "0.10"
 which = "5"
-x509 = "0.2"
+x509-cert = { version = "0.3", features = ["builder", "hazmat"] }
 x509-parser = "0.14"
-yubikey = { version = "=0.8.0-pre.0", features = ["untested"] }
+yubikey = "=0.9.0-rc.0"
+# Only used to select the `yubikey` certificate signer for P-256 keys.
+p256-yubikey = { package = "p256", version = "0.14", default-features = false }
 
 # Translations
 i18n-embed = { version = "0.15", features = ["desktop-requester", "fluent-system"] }

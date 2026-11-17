@@ -4,6 +4,7 @@ use age_core::primitives::bech32_encode;
 use age_core::secrecy::{ExposeSecret, SecretString};
 use age_plugin::{identity, Callbacks};
 use dialoguer::Password;
+use getrandom::SysRng;
 use log::{debug, error, warn};
 use std::convert::Infallible;
 use std::env;
@@ -19,7 +20,7 @@ use yubikey::{
     certificate::Certificate,
     piv::{decrypt_data, AlgorithmId, RetiredSlotId, SlotId},
     reader::{Context, Reader},
-    Key, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
+    Key, MgmAlgorithmId, MgmKey, PinPolicy, Serial, TouchPolicy, YubiKey,
 };
 
 use crate::{
@@ -27,7 +28,7 @@ use crate::{
     fl,
     native::p256tag,
     recipient::TAG_BYTES,
-    util::{otp_serial_prefix, Metadata, POLICY_EXTENSION_OID},
+    util::{cert_der, otp_serial_prefix, Metadata, POLICY_EXTENSION_OID},
     Recipient, IDENTITY_PREFIX,
 };
 
@@ -423,36 +424,76 @@ pub(crate) fn manage(yubikey: &mut YubiKey) -> Result<(), Error> {
         yubikey.change_pin(pin.as_bytes(), new_pin.as_bytes())?;
     }
 
+    let preferred_alg = preferred_mgm_algorithm(yubikey);
+
     match MgmKey::get_protected(yubikey) {
-        Ok(mgm_key) => yubikey.authenticate(mgm_key).map_err(|e| match e {
-            yubikey::Error::AuthenticationError => Error::ManagementKeyAuth,
-            _ => e.into(),
-        })?,
+        Ok(mgm_key) => {
+            yubikey.authenticate(&mgm_key).map_err(|e| match e {
+                yubikey::Error::AuthenticationError => Error::ManagementKeyAuth,
+                _ => e.into(),
+            })?;
+
+            // Migrate PIN-protected TDES management keys to AES, if supported.
+            if mgm_key.algorithm_id() == MgmAlgorithmId::ThreeDes
+                && preferred_alg != MgmAlgorithmId::ThreeDes
+            {
+                eprintln!();
+                eprintln!("{}", fl!("mgr-upgrading-mgmt-key"));
+                set_protected_mgm_key(yubikey, preferred_alg)?;
+            }
+        }
         Err(yubikey::Error::AuthenticationError) => Err(Error::ManagementKeyAuth)?,
         _ => {
             // Try to authenticate with the default management key.
+            let default_key =
+                MgmKey::get_default(yubikey).map_err(|_| Error::CustomManagementKey)?;
             yubikey
-                .authenticate(MgmKey::default())
+                .authenticate(&default_key)
                 .map_err(|_| Error::CustomManagementKey)?;
 
             // Migrate to a PIN-protected management key.
-            let mgm_key = MgmKey::generate();
             eprintln!();
             eprintln!("{}", fl!("mgr-changing-mgmt-key"));
-            eprint!("... ");
-            mgm_key.set_protected(yubikey).map_err(|e| {
-                eprintln!(
-                    "{}",
-                    fl!(
-                        "mgr-changing-mgmt-key-error",
-                        management_key = hex::encode(mgm_key.as_ref()),
-                    )
-                );
-                e
-            })?;
-            eprintln!("{}", fl!("mgr-changing-mgmt-key-success"));
+            set_protected_mgm_key(yubikey, preferred_alg)?;
         }
     }
+
+    Ok(())
+}
+
+/// Returns the algorithm to use for new PIN-protected management keys.
+///
+/// AES management keys are supported by YubiKeys with firmware 5.4 and above. We use
+/// AES-192, which is the default management key algorithm since firmware 5.7.
+fn preferred_mgm_algorithm(yubikey: &YubiKey) -> MgmAlgorithmId {
+    let version = yubikey.version();
+    if (version.major, version.minor) >= (5, 4) {
+        MgmAlgorithmId::Aes192
+    } else {
+        MgmAlgorithmId::ThreeDes
+    }
+}
+
+/// Replaces the current management key with a new random PIN-protected management key
+/// using the given algorithm.
+///
+/// The caller must already be authenticated with the current management key.
+fn set_protected_mgm_key(yubikey: &mut YubiKey, alg: MgmAlgorithmId) -> Result<(), Error> {
+    let mgm_key = MgmKey::generate(alg, &mut SysRng)?;
+    eprint!("... ");
+    mgm_key.set_protected(yubikey).inspect_err(|_| {
+        eprintln!(
+            "{}",
+            fl!(
+                "mgr-changing-mgmt-key-error",
+                management_key = hex::encode(mgm_key.as_ref()),
+            )
+        );
+    })?;
+
+    // Ensure that the new management key works, and that we remain authenticated.
+    yubikey.authenticate(&mgm_key)?;
+    eprintln!("{}", fl!("mgr-changing-mgmt-key-success"));
 
     Ok(())
 }
@@ -469,7 +510,8 @@ pub(crate) fn identify_recipient(cert: &Certificate) -> Option<Recipient> {
     // parts of their private key material in certificate extensions to work around
     // hardware limitations. Not understanding these extensions could lead to encrypting
     // with the wrong protocol and violating security assumptions.
-    let (_, c) = x509_parser::parse_x509_certificate(cert.as_ref()).ok()?;
+    let der = cert_der(cert);
+    let (_, c) = x509_parser::parse_x509_certificate(&der).ok()?;
     if c.tbs_certificate
         .extensions()
         .iter()

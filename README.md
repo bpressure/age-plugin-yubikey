@@ -171,8 +171,12 @@ $ age-plugin-yubikey --list-all
 - If it detects that the default PIN is being used, it will prompt the user to
   change the PIN. The PUK is then set to the same value as the PIN.
 - If it detects that the default management key is being used, it generates a
-  random management key and stores it in PIN-protected metadata.
+  random management key and stores it in PIN-protected metadata. On YubiKeys
+  with firmware 5.4 or newer, this is an AES-192 key; older YubiKeys use TDES.
   `age-plugin-yubikey` does not support custom management keys.
+- If it detects a PIN-protected TDES management key on a YubiKey that supports
+  AES management keys (firmware 5.4 or newer), it replaces it with a random
+  PIN-protected AES-192 management key.
 
 ## License
 

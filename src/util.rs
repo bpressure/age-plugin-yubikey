@@ -2,6 +2,7 @@ use std::fmt;
 use std::iter;
 
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
+use x509_cert::der::{oid::ObjectIdentifier, Encode};
 use x509_parser::{certificate::X509Certificate, der_parser::oid::Oid};
 use yubikey::{
     piv::{RetiredSlotId, SlotId},
@@ -12,6 +13,15 @@ use crate::fl;
 use crate::{error::Error, key::Stub, Recipient, BINARY_NAME, USABLE_SLOTS};
 
 pub(crate) const POLICY_EXTENSION_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 41482, 3, 8];
+pub(crate) const POLICY_EXTENSION_X509_OID: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.3.6.1.4.1.41482.3.8");
+
+/// Returns the DER encoding of the given certificate.
+pub(crate) fn cert_der(cert: &Certificate) -> Vec<u8> {
+    cert.cert
+        .to_der()
+        .expect("certificates parsed from DER can be re-encoded")
+}
 
 pub(crate) fn ui_to_slot(slot: u8) -> Result<RetiredSlotId, Error> {
     // Use 1-indexing in the UI for niceness
@@ -129,7 +139,8 @@ impl Metadata {
         cert: &Certificate,
         all: bool,
     ) -> Option<Self> {
-        let (_, cert) = x509_parser::parse_x509_certificate(cert.as_ref()).ok()?;
+        let der = cert_der(cert);
+        let (_, cert) = x509_parser::parse_x509_certificate(&der).ok()?;
 
         // We store the PIN and touch policies for identities in their certificates
         // using the same certificate extension as PIV attestations.

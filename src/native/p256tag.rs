@@ -13,7 +13,8 @@ use p256::{
     EncodedPoint,
 };
 use rand::rngs::OsRng;
-use yubikey::{certificate::PublicKeyInfo, Certificate};
+use x509_cert::{der::oid::ObjectIdentifier, spki::SubjectPublicKeyInfoRef};
+use yubikey::Certificate;
 
 use super::{stanza_tag, YubiKeyKemPrivateKey};
 use crate::{
@@ -24,6 +25,9 @@ use crate::{
 
 pub(crate) const PLUGIN_NAME: &str = "tag";
 const RECIPIENT_PREFIX: bech32::Hrp = bech32::Hrp::parse_unchecked("age1tag");
+
+const OID_EC_PUBLIC_KEY: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.2.1");
+const OID_SECP256R1: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.3.1.7");
 
 const P256TAG_RECIPIENT_TAG: &str = "p256tag";
 const P256TAG_SALT: &str = "age-encryption.org/p256tag";
@@ -89,16 +93,19 @@ impl Recipient {
         Self::from_spki(cert.subject_pki())
     }
 
-    pub(crate) fn from_spki(spki: &PublicKeyInfo) -> Option<Self> {
-        let encoded = match spki {
-            PublicKeyInfo::EcP256(pubkey) => Some(pubkey),
-            _ => None,
-        }?;
+    pub(crate) fn from_spki(spki: SubjectPublicKeyInfoRef<'_>) -> Option<Self> {
+        // Check that this is a P-256 public key.
+        if spki.algorithm.oid != OID_EC_PUBLIC_KEY
+            || spki.algorithm.parameters_oid().ok()? != OID_SECP256R1
+        {
+            return None;
+        }
+        let encoded = p256::EncodedPoint::from_bytes(spki.subject_public_key.as_bytes()?).ok()?;
 
         // Check that the certificate encoding is uncompressed.
         let pk_recip = <Kem as hpke::Kem>::PublicKey::from_bytes(encoded.as_bytes()).ok()?;
 
-        let point = p256::PublicKey::from_encoded_point(encoded).into_option()?;
+        let point = p256::PublicKey::from_encoded_point(&encoded).into_option()?;
         let compressed = point.to_encoded_point(true);
 
         Some(Self {

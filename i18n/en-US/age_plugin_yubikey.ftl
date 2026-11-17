@@ -151,6 +151,9 @@ mgr-nope-default-pin  = You entered the default PIN again. You need to change it
 mgr-changing-mgmt-key =
     ✨ Your {-yubikey} is using the default management key.
     ✨ We'll migrate it to a PIN-protected management key.
+mgr-upgrading-mgmt-key =
+    ✨ Your {-yubikey} is using a PIN-protected TDES management key.
+    ✨ We'll migrate it to a PIN-protected AES management key.
 mgr-changing-mgmt-key-error =
     An error occurred while setting the new management key.
     ⚠️ SAVE THIS MANAGEMENT KEY - YOU MAY NEED IT TO MANAGE YOUR {-yubikey}! ⚠️
@@ -191,9 +194,9 @@ plugin-err-pin-required     = A PIN is required for {-yubikey} with serial {$yub
 
 err-mgmt-key-auth = Failed to authenticate with the PIN-protected management key.
 rec-mgmt-key-auth =
-    Check whether your management key is using the TDES algorithm.
-    AES is not supported yet: {$aes_url}
-err-custom-mgmt-key = Custom unprotected non-TDES management keys are not supported.
+    The PIN-protected management key stored on your {-yubikey} does not match
+    the management key that is currently set.
+err-custom-mgmt-key = Custom unprotected management keys are not supported.
 rec-change-mgmt-key =
     You can use the {-yubikey} Manager CLI to change to a protected management key:
     {"  "}{$cmd}

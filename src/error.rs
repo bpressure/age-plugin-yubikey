@@ -58,8 +58,7 @@ impl From<yubikey::Error> for Error {
 // manually to provide the error output we want.
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const CHANGE_MGMT_KEY_CMD: &str =
-            "ykman piv access change-management-key -a TDES --protect";
+        const CHANGE_MGMT_KEY_CMD: &str = "ykman piv access change-management-key --protect";
         const CHANGE_MGMT_KEY_URL: &str = "https://developers.yubico.com/yubikey-manager/";
 
         match self {
@@ -95,9 +94,8 @@ impl fmt::Debug for Error {
             )?,
             Error::Io(e) => wlnfl!(f, "err-io", err = e.to_string())?,
             Error::ManagementKeyAuth => {
-                let aes_url = "https://github.com/str4d/age-plugin-yubikey/issues/92";
                 wlnfl!(f, "err-mgmt-key-auth")?;
-                wlnfl!(f, "rec-mgmt-key-auth", aes_url = aes_url)?;
+                wlnfl!(f, "rec-mgmt-key-auth")?;
                 wlnfl!(
                     f,
                     "rec-change-mgmt-key",

@@ -406,9 +406,8 @@ fn main() -> Result<(), Error> {
                     .map(|(key, _, recipient)| {
                         recipient.as_ref().map(|_| {
                             // Cache the details we need to display to the user.
-                            let (_, cert) =
-                                x509_parser::parse_x509_certificate(key.certificate().as_ref())
-                                    .unwrap();
+                            let der = util::cert_der(key.certificate());
+                            let (_, cert) = x509_parser::parse_x509_certificate(&der).unwrap();
                             let (name, _) = util::extract_name_and_version(&cert, true).unwrap();
                             let created = cert
                                 .validity()

@@ -13,9 +13,16 @@ to 0.3.0 are beta releases.
   - Encryption requires making the `age-plugin-yubikey` binary available on the
     `PATH` as `age-plugin-tag`, or upgrading to a client version that builds in
     support for this new native recipient type.
+- Support for AES management keys, including YubiKeys with firmware 5.7 or
+  newer that use an AES-192 management key by default.
+  - When `age-plugin-yubikey` sets up a PIN-protected management key on a
+    YubiKey with firmware 5.4 or newer, it now uses AES-192 instead of TDES.
+  - Existing PIN-protected TDES management keys are migrated to AES-192 the next
+    time `age-plugin-yubikey` manages a YubiKey that supports AES.
 
 ### Changed
-- MSRV is now 1.70.0.
+- MSRV is now 1.89.0.
+- Migrated to `yubikey 0.9.0-rc.0`.
 - Encryption to an identity now uses the preferred recipient type supported for
   that identity.
 - `age-plugin-yubikey` now prints `age1tag1..` recipients in its CLI and
